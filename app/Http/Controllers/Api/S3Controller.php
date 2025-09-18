@@ -63,7 +63,7 @@ class S3Controller extends Controller
             return response()->json([
                 'status' => false,
                 'message' => 'Upload failed!',
-                'error' => $e->getMessage(), // dev/debug ke liye
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -85,13 +85,13 @@ class S3Controller extends Controller
 
     public function getTemporaryUrl($filePath)
     {
-        $filePath = urldecode($filePath); // spaces etc. handle karne ke liye
+        $filePath = urldecode($filePath);
 
         if (!Storage::disk('s3')->exists($filePath)) {
             return response()->json([
                 'status' => false,
                 'message' => 'File not found',
-                'path' => $filePath // debugging ke liye
+                'path' => $filePath
             ], 404);
         }
 
