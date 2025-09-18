@@ -1,61 +1,192 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+## CloudDrive AWS S3 – Backend API (Laravel)
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+REST API for user auth and file management on AWS S3. Includes upload, download, temp URL generation, delete, move, and recursive listing. Auth handled via Laravel Sanctum token.
 
-## About Laravel
+### Tech
+- **Framework**: Laravel (PHP)
+- **Storage**: AWS S3 (production), local disk (development)
+- **Auth**: Laravel Sanctum (token-based)
+- **DB**: MySQL/PostgreSQL/SQLite compatible via Eloquent
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### Prerequisites
+- PHP 8.2+
+- Composer
+- A database (MySQL/PostgreSQL/SQLite)
+- AWS account and S3 bucket (for production features like temp URLs and move)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### Setup
+1) Clone and install dependencies
+```bash
+cd backend
+composer install
+```
 
-## Learning Laravel
+2) Environment
+```bash
+cp .env.example .env
+php artisan key:generate
+```
+Configure database and AWS in `.env`:
+```env
+APP_NAME=CloudDrive
+APP_URL=http://localhost:8000
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+# Database
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=clouddrive
+DB_USERNAME=root
+DB_PASSWORD=secret
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+# AWS (required for production S3 operations)
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+AWS_DEFAULT_REGION=us-east-1
+AWS_BUCKET=your_bucket_name
+# Optional
+# AWS_URL=https://your-cdn-or-bucket-url
+# AWS_USE_PATH_STYLE_ENDPOINT=false
+```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+3) Migrate database
+```bash
+php artisan migrate
+```
 
-## Laravel Sponsors
+4) Local storage symlink (for local disk downloads/URLs)
+```bash
+php artisan storage:link
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+5) Run server
+```bash
+php artisan serve
+```
 
-### Premium Partners
+---
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+### Storage behavior
+- In development (`APP_ENV` not `production`): files are stored on the `local` disk. Downloads and URLs are served from `public/storage` after `storage:link`.
+- In production (`APP_ENV=production`): files are stored on `s3`. Public URLs use S3; temporary URLs and move operations require valid AWS credentials and bucket config.
+- Note: `temp-url` and `move` endpoints always operate on S3.
 
-## Contributing
+---
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### Authentication
+Use token-based auth via Sanctum.
 
-## Code of Conduct
+1) Register
+```http
+POST /api/register
+Content-Type: application/json
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+{ "name": "John Doe", "email": "john@example.com", "password": "secret123" }
+```
 
-## Security Vulnerabilities
+2) Login (get token)
+```http
+POST /api/login
+Content-Type: application/json
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+{ "email": "john@example.com", "password": "secret123" }
+```
+Response includes `token`. Use it as `Authorization: Bearer <token>` for protected routes.
 
-## License
+3) Logout
+```http
+POST /api/logout
+Authorization: Bearer <token>
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+---
+
+### File APIs (all require Bearer token unless stated)
+
+- Upload
+```http
+POST /api/s3/upload
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+
+file: <binary>
+folder: optional/subfolder
+```
+Response: `{ status, message, file, url }`
+
+- Download
+```http
+GET /api/s3/download/{filePath}
+Authorization: Bearer <token>
+```
+`{filePath}` is the stored path (URL-encoded) returned on upload (e.g. `uploads/my.pdf`).
+
+- Temporary URL (S3 only)
+```http
+GET /api/s3/temp-url/{filePath}
+Authorization: Bearer <token>
+```
+Response: `{ status, url }` valid for 10 minutes.
+
+- Delete
+```http
+DELETE /api/s3/delete/{filePath}
+Authorization: Bearer <token>
+```
+
+- List (recursive)
+```http
+GET /api/s3/list/{folder?}
+Authorization: Bearer <token>
+```
+Response: tree of files and folders with URLs (S3 or local).
+
+- Move (S3 only)
+```http
+POST /api/s3/move
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{ "from": "uploads/old.pdf", "to": "archive/old.pdf" }
+```
+
+---
+
+### Quick cURL examples
+Login
+```bash
+curl -s -X POST http://localhost:8000/api/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"john@example.com","password":"secret123"}'
+```
+
+Upload
+```bash
+curl -s -X POST http://localhost:8000/api/s3/upload \
+  -H "Authorization: Bearer $TOKEN" \
+  -F file=@/path/to/file.pdf \
+  -F folder=uploads
+```
+
+List
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8000/api/s3/list
+```
+
+---
+
+### Notes
+- The `files` table stores metadata for each upload. Ensure migrations run.
+- For local development downloads/URLs, run `php artisan storage:link` once.
+- Set `APP_ENV=production` and AWS variables to enable S3 storage in production.
+
+### Postman
+- A ready-to-use environment is provided at `postman/CloudDrive-Local.postman_environment.json`.
+- Import your API collection in Postman, select the environment, and set `token` via login response.
+- Use `{{base_url}}` and `{{token}}` in requests. Example base URL: `http://localhost:8000`.
+
+### License
+MIT
